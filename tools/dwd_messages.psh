@@ -1,0 +1,269 @@
+#!/usr/bin/env /home/pi/.venv/bin/python3
+# coding: utf-8
+
+import can
+import signal
+import sys
+import binascii
+import datetime
+import struct
+import socket
+import time
+from pprint import pprint
+import random
+import os
+from os import system
+from pathlib import Path
+import socket
+import requests
+import yaml
+import argparse
+from threading import Thread
+from websockets.sync.server import serve
+
+bus0 = None
+notifier0 = None
+can_listener0 = None
+
+
+class CanListener(can.Listener):
+
+    _print_dt = True
+    _data = ""
+    _data_length = 0
+    _frame = 0
+    _sequence  = 0
+    _ws = None
+    server = None
+    _ws_clients = []
+
+    _print_navtex = False
+    s = None
+
+    _message_of_interest = ""
+
+    def __init__(self, can, config):
+        self.bus0 = bus0
+        self._print_navtex = False
+        self._config = config
+
+        self._message_of_interest = "DWD startup"
+        self.send_with_messenger()
+
+        if self._config['print']:
+
+            printer = Path(self._config['printer']['path'])
+            if printer.exists():
+
+                with open(self._config['printer']['path'], "w") as f:
+                    print(self._message_of_interest, end='\n\n\n\n', file=f)
+            try:
+                port = 1
+                self.s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+                self.s.bind((self._config['bluetooth']['dongle'], port))
+                self.s.connect((self._config['bluetooth']['device'], port))
+                self.s.send(("{}\n\n\n\n".format(self._message_of_interest)).encode("utf-8")) # line feed
+                self.s.shutdown(socket.SHUT_WR)
+            except Exception as error:
+                print(type(error).__name__, error)
+                self.s.close()
+        self._message_of_interest = ""
+
+        thread = Thread(target = self.ws_thread)
+
+        thread.start()
+       
+
+    def ws_thread(self):
+
+        with serve(self.echo, '', 8765) as self.server:
+            self.server.serve_forever()
+
+    def send_with_messenger(self):
+
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'OCS-APIRequest': 'true',
+        }
+
+        data = '{"token":"' + self._config['messenger']['token'] + '", "message":"' + self._message_of_interest + '"}'
+        data = data.encode('unicode_escape').decode('utf-8')
+        try:
+            response = requests.post(self._config['messenger']['url'] + self._config['messenger']['token'], headers=headers, data=data, auth=(self._config['messenger']['user'], self._config['messenger']['pass']))
+        except:
+            pass
+
+   
+    def on_message_received(self, msg):
+        
+        
+        if msg.arbitration_id == 0x065:
+
+            # first frame?
+            if msg.data[0] == 0x00:
+                self._data = ""
+                self._data_length = msg.data[1] 
+                i = 2
+                while self._data_length > 0 and i < 8:
+                    self._data = self._data + chr(msg.data[i])
+                    self._data_length = self._data_length - 1
+                    i = i + 1
+
+
+            if msg.data[0] != 0x00:
+                self._sequence = (msg.data[0] & 0b11110000) >> 4
+                self._frame = msg.data[0] & 0b00001111
+                
+                i = 1
+                while self._data_length > 0 and i < 8:
+                    self._data = self._data + chr(msg.data[i])
+                    self._data_length = self._data_length - 1
+                    i = i + 1
+
+                if self._data_length == 0:
+                    
+
+                    if any(ext in self._data for ext in self._config['wanted']) and self._print_navtex == False:
+                        print("Startet recording for warnings")
+                        self._print_navtex = True
+
+                        if self._config['print']:
+
+                            printer = Path(self._config['printer']['path'])
+                            if not printer.exists():
+                                
+                                try:
+                                    port = 1
+                                    self.s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+                                    self.s.bind((self._config['bluetooth']['dongle'], port))
+                                    self.s.connect((self._config['bluetooth']['device'], port))
+                                except Exception as error:
+                                    print(type(error).__name__, error)
+                                    self.s.close()
+
+
+                    if "NNNN" in self._data and self._print_navtex:
+                        self._print_navtex = False
+                        
+                        self.send_with_messenger()
+                        self._message_of_interest = ""
+                       
+                        if self._config['print']:
+                            printer = Path(self._config['printer']['path'])
+                            if printer.exists():
+                                with open(self._config['printer']['path'], "w") as f:
+                                    print('\n\n\n', file=f)
+                            else:
+                                try:
+                                    self.s.send("\n\n\n".encode("utf-8")) # line feed
+                                    self.s.shutdown(socket.SHUT_WR)
+                                    self.s.close()
+                                except Exception as error:
+                                    print(type(error).__name__, error)
+                        
+                            
+
+                    print(self._data, end='')
+
+                    # send to all ws clients
+                    t_list = self._ws_clients
+                    if len(self._ws_clients) > 0:
+                        for c in self._ws_clients:
+                            try:
+                                c.send(self._data)
+                            except:
+                                t_list.remove(c)
+                    self._ws_clients = t_list
+                    
+                    if self._print_navtex:
+                        self._message_of_interest = self._message_of_interest + self._data
+
+                        if self._config['print']:
+                            printer = Path(self._config['printer']['path'])
+                            if printer.exists():
+
+                                with open(self._config['printer']['path'], "w") as f:
+                                    print(self._data.rstrip(), end='\n', file=f)
+                            else:
+                                try:
+                                    self.s.send(("{}\n".format(self._data.rstrip())).encode("utf-8"))
+                                except Exception as error:
+                                    print(type(error).__name__, error)
+                    
+    def echo(self, websocket):
+        if not websocket in self._ws_clients:
+            self._ws_clients.append(websocket)
+        try:
+            for message in websocket:
+                websocket.send('')
+        except:
+            pass
+
+def main():
+    global bus0, notifier0, can_listener0
+
+    parser = argparse.ArgumentParser(description='Get DWD messages from canbus and process')
+    parser.add_argument('-p', '--print', help='User a attached printer if availabe (Bluetooth or USB)', action='store_true')
+    args = parser.parse_args()
+
+    
+
+    config = None
+    home = Path.home()
+    cfg_file1 = Path("dwd.yaml")
+    cfg_file2 = home.joinpath("dwd.yaml")
+    cfg_file3 = Path("/etc/dwd.yaml")
+
+    if cfg_file1.exists():
+        with open(cfg_file1) as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+    elif cfg_file2.exists():
+        with open(cfg_file2) as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+    elif cfg_file3.exists():
+        with open(cfg_file3) as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+    else:
+
+        print("Could not find config file.")
+        exit(1)
+    
+    config['print'] = args.print
+
+    # using parameters from /home/pi/can.conf
+    #bus0 = can.interface.Bus(context='virtual')
+    filters = [
+        {"can_id": 0x065, "can_mask": 0x7FF, "extended": False},
+    ]
+    bus0 = can.interface.Bus(can_filters=filters)
+    can_listener0 = CanListener(bus0, config)
+
+    notifier0 = can.Notifier(bus0, [can_listener0])
+
+    
+
+    
+
+def signal_handler(sig, frame):
+    global bus0, notifier0, can_listener0
+    print('You pressed Ctrl+C!')
+    system('tput cnorm')
+
+    can_listener0.server.shutdown()
+
+    notifier0.stop()
+    bus0.shutdown()
+   
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
+
+
+if __name__ == '__main__':
+    main()
+    signal.pause()
+
+
+
