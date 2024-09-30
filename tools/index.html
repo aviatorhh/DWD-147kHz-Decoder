@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>DWD 147.7kHz Messages</title>
+<style>
+body {
+	 background-color: black;
+    color: seagreen;
+}
+#navtex {
+	font-family: "Lucida Console", "Menlo", "Monaco", "Courier", monospace;
+}
+</style>
+</head>
+<body>
+    <button onclick="contactServer()">Click Here</button>
+    <div id="navtex"></div>
+</body>
+<script>
+	var n_div = document.getElementById('navtex');
+function connect() {
+  var ws = new WebSocket('ws://cantools.flynjk.loc:8765');
+  ws.onopen = function() {
+    // subscribe to some channels
+    ws.send(JSON.stringify({
+    }));
+  };
+
+  ws.onmessage = function(e) {
+    //console.log('Message:', e.data);
+	n_div.innerHTML += e.data + '<br>';
+	window.scrollTo(0, document.body.scrollHeight);
+  };
+
+  ws.onclose = function(e) {
+    console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
+    setTimeout(function() {
+      connect();
+    }, 1000);
+  };
+
+  ws.onerror = function(err) {
+    console.error('Socket encountered error: ', err.message, 'Closing socket');
+    ws.close();
+  };
+}
+
+connect();
+
+</script>
+</html>
