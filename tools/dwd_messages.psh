@@ -86,7 +86,7 @@ class CanListener(can.Listener):
             'Accept': 'application/json',
             'OCS-APIRequest': 'true',
         }
-
+        self._message_of_interest = self._message_of_interest.replace("\r", "") 
         data = '{"token":"' + self._config['messenger']['token'] + '", "message":"' + self._message_of_interest + '"}'
         data = data.encode('unicode_escape').decode('utf-8')
         try:
