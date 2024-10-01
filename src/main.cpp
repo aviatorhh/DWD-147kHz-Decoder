@@ -16,14 +16,19 @@ uint16_t CAN_IDS[] = { CAN_ID_ENG };
 #define CAN_ID_MASK 0x00f
 
 volatile byte buf[8];
+long canId = 0;
+boolean has_eng;
+boolean has_can;
+boolean has_rtr;
+bool rtr;
+uint8_t len;
+uint8_t msg_cnt;
+
+uint8_t message[64];
 #endif
 
-volatile float rpm_counter;
 uint8_t ch_cnt;
-uint8_t msg_cnt;
 int RXLED = 17;
-
-volatile uint8_t g_count;
 
 const uint8_t STARTER_PIN = 5;
 const uint8_t STOPPER_PIN = 6;
@@ -33,17 +38,9 @@ volatile long prevPulseMicros = 0;
 volatile uint8_t BIT;
 volatile uint8_t lastBIT;
 
+uint16_t f_mid;
+
 uint8_t t1_cnt;
-
-uint8_t message[64];
-
-long canId = 0;
-boolean has_eng;
-boolean has_can;
-boolean has_rtr;
-bool rtr;
-uint8_t len;
-volatile uint8_t revolutions = 0;
 
 long rpms = 0;
 
@@ -53,8 +50,13 @@ volatile long latestPulseMicros = 0;
 
 volatile long revMicros = 0;
 
+uint16_t mean_buffer[512];
+uint16_t mean_buffer2[60];
+uint16_t mb_counter;
+uint16_t mb2_counter;
+uint32_t mean;
+uint16_t milsec;
 
-volatile bool printIt = false;
 boolean dsp;
 byte ti;
 uint8_t baudot;
@@ -62,6 +64,7 @@ char ch;
 
 
 void setup() {
+  f_mid = 570;
   t1_cnt = 0;
   BIT = 0;
   lastBIT = 0;
@@ -69,9 +72,11 @@ void setup() {
   msg_cnt = 0;
   b1_cnt = 0;
   b2_cnt = 0;
-  g_count = 0;
-  pinMode(STARTER_PIN, OUTPUT);  // Starter Relay
-  pinMode(STOPPER_PIN, OUTPUT);  // Stopper Relay
+  mb_counter = 0;
+  mb2_counter = 0;
+  milsec = 0;
+  //pinMode(STARTER_PIN, OUTPUT);  // Starter Relay
+  //pinMode(STOPPER_PIN, OUTPUT);  // Stopper Relay
 
   digitalWrite(STARTER_PIN, LOW);
   digitalWrite(RXLED, HIGH);
@@ -101,27 +106,6 @@ void setup() {
   cli();  // stop interrupts
   attachInterrupt(digitalPinToInterrupt(0), rpm, RISING);
 
-  // TIMER 1 for interrupt frequency 2 Hz:
-  /**TCCR1A = 0; // set entire TCCR1A register to 0
-  TCCR1B = 0; // same for TCCR1B
-  TCNT1  = 0; // initialize counter value to 0
-  // set compare match register for 2 Hz increments
-  OCR1A = 31249; // = 16000000 / (256 * 2) - 1 (must be <65536)
-  // turn on CTC mode
-  TCCR1B |= (1 << WGM12);
-  // Set CS12, CS11 and CS10 bits for 256 prescaler
-  TCCR1B |= (1 << CS12) | (0 << CS11) | (0 << CS10);
-  // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
-  
-  TCCR1A = 0;
-
-  TCCR1B = 0;
-
-  TCCR1B |= (1 << CS12); //Prescaler 256
-
-  TIMSK1 |= (1 << TOIE1); //enable timer overflow
-  */
 
   TCCR1A = 0;
   TCCR1B = 0;
@@ -135,7 +119,6 @@ void setup() {
   TCCR1B |= (1 << CS11) | (1 << CS10);
   // Output Compare Match A Interrupt Enable
   TIMSK1 |= (1 << OCIE1A);
-  rpm_counter = 0;
   sei();  // allow interrupts
 #ifdef SERIAL_OUT   
   Serial.println("go");
@@ -146,7 +129,7 @@ void setup() {
 
 
 ISR(TIMER1_COMPA_vect) {
-
+  milsec++;
   static byte rSq;
   ti++;
   if (rSq == 0 && BIT == 0) {
@@ -179,13 +162,38 @@ ISR(TIMER1_COMPA_vect) {
 
 void loop() {
 
+  if (milsec >= 1000) {
+
+    mean = 0;
+    for(uint16_t i=0; i < 512; i++) {
+      mean += mean_buffer[i];
+    }
+    mean /= 512;
+
+    mean_buffer2[mb2_counter++] = mean;
+
+  if (mb2_counter == 60) {
+    mean = 0;
+    mb2_counter = 0;
+    for(uint8_t i=0; i < 60; i++) {
+      mean += mean_buffer2[i];
+    }
+    mean /= 60;
+    f_mid = mean;
+  #ifdef SERIAL_OUT
+    //Serial.println(mean, DEC);
+  #endif    
+  }
+
+
+    milsec = 0;
+  }
+
+#ifdef HAS_CAN
   if (has_can && has_eng && len == 1) {
     has_can = has_eng = false;
   }
-
-  //if (g_count>=DEPTH) {
-
-  //Serial.println(rpms, DEC);
+#endif
 
   //baudot decoding
   static boolean fig;
@@ -319,37 +327,34 @@ void loop() {
     if (ch == '\n') {
       send_packet_message(message, msg_cnt);
       msg_cnt = 0;
-      //digitalWrite(STARTER_PIN, !digitalRead(STARTER_PIN));
-      //Serial.print(message);
     }
 
 #endif  
   }
 
-
-
-
 }
 
 
 void rpm() {
-  //rpm_counter++;
   long nowMicros = micros();
 
   rpms = nowMicros - prevPulseMicros;
 
   prevPulseMicros = nowMicros;
 
+  mean_buffer[mb_counter++] = rpms;
+  if (mb_counter == 512) {
+    mb_counter = 0;
+  }
 
-
-  if (rpms > 574 && rpms < 628) b1_cnt++;
+  if (rpms > (f_mid+5) && rpms < (f_mid+20)) b1_cnt++;
   if (b1_cnt == 2) {
     BIT = 1;
     b1_cnt = 0;
     b2_cnt = 0;
   }
 
-  if (rpms > 500 && rpms < 570) b2_cnt++;
+  if (rpms > (f_mid-20) && rpms < (f_mid-5)) b2_cnt++;
   if (b2_cnt == 2) {
     BIT = 0;
     b1_cnt = 0;
@@ -365,8 +370,6 @@ void rpm() {
     lastBIT = BIT;
   }
 
-
-  //PINB = 1;
 }
 #ifdef HAS_CAN  
 void MCP2515_ISR(int packetSize) {
