@@ -6,4 +6,4 @@ This version puts out its messages via the serial line (300 baud) and via a atta
 Currently they are used on a NMEA2000 network.
 
 ## Building (PlatformIO)
-Use <code>PLATFORMIO_BUILD_FLAGS="'-DHAS_CAN -DSERIAL_OUT'" pio run</code>
+Use <code>PLATFORMIO_BUILD_FLAGS="-DHAS_CAN -DSERIAL_OUT" pio run</code>
