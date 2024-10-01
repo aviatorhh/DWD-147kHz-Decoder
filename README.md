@@ -1,5 +1,18 @@
 # DWD-147kHz-Decoder
-The ATmega receives the signal on its RX pin (0) via an interrupt. It can directly be connected to the digital signal pin on the NASA target 147 board (pictures will follow).
+The ATmega receives the signal on its RX pin (0) via an interrupt. It can directly be connected to the digital signal pin (see black wire below) on the NASA target 147 board.
+
+![IMG_5271](https://github.com/user-attachments/assets/468731fd-245c-4392-bd06-803ced2bc289)
+![pcb_front](https://github.com/user-attachments/assets/9ae0b2fe-de01-40ea-b6c5-436676522244)
+
+
+
+Where 
+- red is 5V
+- brown is GND
+- black is TTL FSK signal
+- white is raw audio signal
+
+These wires have been soldered by me.
 
 This version puts out its messages via the serial line (300 baud) and via a attached CANbus interface. The messages are sent with CAN ID 0x065 (randomly chosen) as multiframe packets (ISO 15765-2).
 
