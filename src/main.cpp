@@ -1,19 +1,23 @@
+#ifdef HAS_CAN  
 #include <CAN.h>
+#endif
+#include <Arduino.h>
 #include "main.h"
-
 
 uint8_t b1_cnt;
 uint8_t b2_cnt;
 
+#ifdef HAS_CAN  
+
 #define MCP_CAN_CS_PIN 10
-
 #define CAN_ID_ENG 0x00a
-
 #define CAN_IDS_SIZE 1
 uint16_t CAN_IDS[] = { CAN_ID_ENG };
 #define CAN_ID_MASK 0x00f
 
 volatile byte buf[8];
+#endif
+
 volatile float rpm_counter;
 uint8_t ch_cnt;
 uint8_t msg_cnt;
@@ -49,6 +53,14 @@ volatile long latestPulseMicros = 0;
 
 volatile long revMicros = 0;
 
+
+volatile bool printIt = false;
+boolean dsp;
+byte ti;
+uint8_t baudot;
+char ch;
+
+
 void setup() {
   t1_cnt = 0;
   BIT = 0;
@@ -65,7 +77,10 @@ void setup() {
   digitalWrite(RXLED, HIGH);
   digitalWrite(STOPPER_PIN, LOW);
   TXLED0;
+#ifdef SERIAL_OUT  
   Serial.begin(300);
+#endif
+#ifdef HAS_CAN  
   CAN.setPins(MCP_CAN_CS_PIN, 7);
   CAN.setClockFrequency(8E6);
 
@@ -80,7 +95,7 @@ void setup() {
 
   CAN.setMaskAndFilter(masks, CAN_IDS, CAN_IDS_SIZE);
   CAN.onReceive(MCP2515_ISR);
-
+#endif
   // RPM Pin
   pinMode(0, INPUT);
   cli();  // stop interrupts
@@ -122,15 +137,11 @@ void setup() {
   TIMSK1 |= (1 << OCIE1A);
   rpm_counter = 0;
   sei();  // allow interrupts
+#ifdef SERIAL_OUT   
   Serial.println("go");
+#endif
 }
 
-
-volatile bool printIt = false;
-boolean dsp;
-byte ti;
-uint8_t baudot;
-char ch;
 
 
 
@@ -298,12 +309,13 @@ void loop() {
     if (ch != '\0') {
       message[msg_cnt++] = ch;
       message[msg_cnt] = '\0';
-
+#ifdef SERIAL_OUT  
       Serial.write(ch);
+#endif
     }
     dsp = 0;
 
-
+#ifdef HAS_CAN  
     if (ch == '\n') {
       send_packet_message(message, msg_cnt);
       msg_cnt = 0;
@@ -311,37 +323,12 @@ void loop() {
       //Serial.print(message);
     }
 
-  
+#endif  
   }
 
 
 
 
-
-
-
-
-
-  /**
-  if (printIt) {
-    
-  
-#ifdef SERIAL_OUT
-    Serial.println(rpms, DEC);
-#endif
-    printIt = false;
-    CAN.beginPacket(0x00a, 7, false);
-    uint8_t hrpm = rpms / 256;
-    CAN.write(hrpm);
-    CAN.write(rpms - (hrpm * 256));
-    CAN.write(BIT);
-    CAN.write(C);
-    CAN.write(0x00);
-    CAN.write(0x00);
-    CAN.write(0x00);
-    CAN.endPacket();
-  }
-*/
 }
 
 
@@ -352,22 +339,6 @@ void rpm() {
   rpms = nowMicros - prevPulseMicros;
 
   prevPulseMicros = nowMicros;
-
-  //BIT = rpms > 0x238;
-  /**
-if (rpms > 0x242) b1_cnt++;
-if (b1_cnt == 10) {
-BIT=1;
-b1_cnt=0;
-b2_cnt=0;
-}
-if (rpms < 0x22e) b2_cnt++;
-if (b2_cnt == 10) {
-BIT=0;
-b1_cnt=0;
-b2_cnt=0;
-}
-*/
 
 
 
@@ -397,7 +368,7 @@ b2_cnt=0;
 
   //PINB = 1;
 }
-
+#ifdef HAS_CAN  
 void MCP2515_ISR(int packetSize) {
   len = packetSize;
   rtr = CAN.packetRtr();
@@ -474,3 +445,4 @@ void send_packet_message(uint8_t* message, int16_t len) {
     CAN.endPacket();
   }
 }
+#endif

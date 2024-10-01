@@ -1,57 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+    <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.6.0">
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>DWD 147.7kHz Messages</title>
-<style>
-body {
-	 background-color: black;
+    <style>
+        body {
+         background-color: black;
     color: seagreen;
-}
-#navtex {
-	font-family: "Lucida Console", "Menlo", "Monaco", "Courier", monospace;
-}
-</style>
+  }
+  #navtex, div#top {
+        font-family: "Lucida Console", "Menlo", "Monaco", "Courier", monospace;
+        padding-top: 11px;
+  }
+  div#top {
+        position: fixed;
+      background-color: rgb(0 0 0 / 100%);
+      -moz-box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
+      -webkit-box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
+      box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
+      width: 100%;
+      padding: 8px 0px 2px 4px;
+      margin: 0;
+      top: 0;
+      left: 0;
+      height: 22px;
+ }
+  #navtex ul {
+    list-style: none;
+    margin: 0 0px 0px 0px;
+    padding: 17px 0px 0px 0;
+  }
+  </style>
 </head>
+
 <body>
-    <button onclick="contactServer()">Click Here</button>
-    <div id="navtex"></div>
+    <div id="top">
+        <form>
+            <input id="scroll" type="checkbox" name="scroll" checked> Scroll Page
+        </form>
+    </div>
+    <div id="navtex">
+        <ul />
+    </div>
 </body>
+<script src="jquery-3.7.1.min.js"></script>
 <script>
-	var n_div = document.getElementById('navtex');
+var li_i = 0;
+const re = new RegExp("\\d{1,2}\\.\\d[NS]\\s+\\d{1,3}\\.\\d[EW]", "g");
+//const re = new RegExp("DDH47", "g");
+var n_div; // = document.getElementById('navtex');
+var scroll_it = true;
+
 function connect() {
-  var ws = new WebSocket('ws://cantools.flynjk.loc:8765');
-  ws.onopen = function() {
-    // subscribe to some channels
-    ws.send(JSON.stringify({
-    }));
-  };
+    var ws = new WebSocket('ws://cantools.flynjk.loc:8765');
+    ws.onopen = function() {
+        // subscribe to some channels
+        ws.send(JSON.stringify({}));
+    };
 
-  ws.onmessage = function(e) {
-    //console.log('Message:', e.data);
-	n_div.innerHTML += e.data + '<br>';
-	window.scrollTo(0, document.body.scrollHeight);
-  };
+    ws.onmessage = function(e) {
+        //console.log('Message:', e.data);
 
-  ws.onclose = function(e) {
-    console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
-    setTimeout(function() {
-      connect();
-    }, 1000);
-  };
+        const found = e.data.match(re);
+        if (found) {
+            console.log(found);
+            let ds = '<li id="li_' + li_i + '">' + e.data + '</li>';
+            ds = ds.replace(re, '<a href="https://maps.google.com/maps/@' + geo2dec(found) + ',9z" target="_blank">' + found + '</a>');
+            n_div.append(ds);;
+        } else {
+            let ds = '<li id="li_' + li_i + '">' + e.data + '</li>';
 
-  ws.onerror = function(err) {
-    console.error('Socket encountered error: ', err.message, 'Closing socket');
-    ws.close();
-  };
+            n_div.append(ds);
+
+        }
+        if (++li_i > 100) {
+            $("#navtex ul li").eq(0).remove();
+        }
+        if (scroll_it) {
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+    };
+
+    ws.onclose = function(e) {
+        console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
+        setTimeout(function() {
+            connect();
+        }, 1000);
+    };
+
+    ws.onerror = function(err) {
+        console.error('Socket encountered error: ', err.message, 'Closing socket');
+        ws.close();
+    };
 }
 
-connect();
+const regeo = new RegExp("(\\d{1,2}\\.\\d[NS])\\s+(\\d{1,3}\\.\\d[EW])", "");
 
+function geo2dec(geo) {
+    let dec;
+    let found = geo.toString().match(regeo);
+
+    // latitude
+    let lat = found[1].slice(-1);
+
+    dec = found[1].substr(0, found[1].length - 1);
+    if (lat == 'S') {
+        dec *= -1;
+    }
+    // longitude
+    let lon = found[2].slice(-1);
+
+    let s_lon = found[2].substr(0, found[2].length - 1);
+    if (lon == 'W') {
+        s_lon *= -1;
+    }
+    dec = dec + ',' + s_lon;
+
+    return dec;
+}
+
+
+
+
+
+$('#scroll').on('click', function(e) {
+    scroll_it = $(this).is(':checked');
+    return true;
+});
+
+$(document).ready(function() {
+    console.log(geo2dec("53.9S   12.0W"));
+    connect();
+
+    n_div = $('#navtex ul');
+});
 </script>
+
 </html>
