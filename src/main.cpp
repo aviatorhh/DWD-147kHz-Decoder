@@ -361,15 +361,6 @@ void rpm() {
     b2_cnt = 0;
   }
 
-
-
-  if (lastBIT == 1 && BIT == 0) {
-    TCNT1 = 0;
-    ti = ti / 10;
-    ti = ti * 10 + 10;
-    lastBIT = BIT;
-  }
-
 }
 #ifdef HAS_CAN  
 void MCP2515_ISR(int packetSize) {
