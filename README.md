@@ -1,10 +1,19 @@
 # DWD-147kHz-Decoder
 
+Webpage using websockets (via CANbus and helper script):
+
 ![Screenshot 2024-10-02 at 08 07 50](https://github.com/user-attachments/assets/84171cc3-8754-4afc-b33e-ed932bcb5f7e)
+
+Serial output:
+
+https://github.com/user-attachments/assets/a0678bb4-e4ab-4a97-b2e0-3c0e1443f004
 
 The ATmega receives the signal on its RX pin (0) via an interrupt. It can directly be connected to the digital signal pin (see black wire below) on the NASA target 147 board.
 
 ![IMG_5271](https://github.com/user-attachments/assets/468731fd-245c-4392-bd06-803ced2bc289)
+
+Note: The upper PCB picture is upside down to the lower.
+
 ![pcb_front](https://github.com/user-attachments/assets/9ae0b2fe-de01-40ea-b6c5-436676522244)
 
 
