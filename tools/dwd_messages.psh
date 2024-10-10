@@ -1,6 +1,6 @@
 #!/usr/bin/env /home/pi/.venv/bin/python3
 # coding: utf-8
-
+# vim: set nowrap:
 import can
 import signal
 import sys
@@ -17,6 +17,7 @@ from pathlib import Path
 import socket
 import requests
 import yaml
+import json
 import argparse
 from threading import Thread
 from websockets.sync.server import serve
@@ -46,9 +47,10 @@ class CanListener(can.Listener):
         self.bus0 = bus0
         self._print_navtex = False
         self._config = config
-
+        self._last_messages = []
         self._message_of_interest = "DWD startup"
         self.send_with_messenger()
+        self._client_config = { "linebuffer": self._config['linebuffer'] } 
 
         if self._config['print']:
 
@@ -80,7 +82,8 @@ class CanListener(can.Listener):
             self.server.serve_forever()
 
     def send_with_messenger(self):
-
+        if not self._config['messaging']:
+            return
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
@@ -98,7 +101,7 @@ class CanListener(can.Listener):
     def on_message_received(self, msg):
         
         
-        if msg.arbitration_id == 0x065:
+        if msg.arbitration_id == 0x065 and msg.dlc == 8:
 
             # first frame?
             if msg.data[0] == 0x00:
@@ -165,7 +168,10 @@ class CanListener(can.Listener):
                             
 
                     print(self._data, end='')
-
+                    if len(self._last_messages) <= self._config['linebuffer']:
+                        self._last_messages.append(self._data)
+                    if len(self._last_messages) > self._config['linebuffer']:
+                        self._last_messages.pop(0)
                     # send to all ws clients
                     t_list = self._ws_clients
                     if len(self._ws_clients) > 0:
@@ -196,18 +202,28 @@ class CanListener(can.Listener):
             self._ws_clients.append(websocket)
         try:
             for message in websocket:
-                websocket.send('')
+                websocket.send(json.dumps(self._client_config))
+                for m in self._last_messages:
+                    websocket.send(m)
         except:
             pass
-
+class CustomHelpFormatter(argparse.HelpFormatter):
+    def _get_help_string(self, action):
+        help = action.help
+        if action.default is not argparse.SUPPRESS:
+            help += f' (default: {action.default})'
+        return help
 def main():
     global bus0, notifier0, can_listener0
 
-    parser = argparse.ArgumentParser(description='Get DWD messages from canbus and process')
+    parser = argparse.ArgumentParser(description='Get DWD messages from canbus and process', formatter_class=CustomHelpFormatter)
     parser.add_argument('-p', '--print', help='User a attached printer if availabe (Bluetooth or USB)', action='store_true')
+    parser.add_argument('-m', '--messaging', help='Use a messaging service', action='store_true')
+    parser.add_argument('-lb', "--linebuffer",  type=int, default=100, help='Number of lines held in buffer')
     args = parser.parse_args()
 
-    
+    #print(args.linebuffer, type(args.linebuffer))
+    #exit(0)
 
     config = None
     home = Path.home()
@@ -230,6 +246,8 @@ def main():
         exit(1)
     
     config['print'] = args.print
+    config['linebuffer'] = args.linebuffer
+    config['messaging'] = args.messaging
 
     # using parameters from /home/pi/can.conf
     #bus0 = can.interface.Bus(context='virtual')
