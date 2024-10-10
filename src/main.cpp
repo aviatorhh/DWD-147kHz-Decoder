@@ -10,10 +10,10 @@ uint8_t b2_cnt;
 #ifdef HAS_CAN  
 
 #define MCP_CAN_CS_PIN 10
-#define CAN_ID_ENG 0x00a
 #define CAN_IDS_SIZE 1
-uint16_t CAN_IDS[] = { CAN_ID_ENG };
-#define CAN_ID_MASK 0x00f
+#define CAN_ID 0x065
+uint16_t CAN_IDS[] = { CAN_ID };
+#define CAN_ID_MASK 0x7ff
 
 volatile byte buf[8];
 long canId = 0;
@@ -33,26 +33,29 @@ int RXLED = 17;
 const uint8_t STARTER_PIN = 5;
 const uint8_t STOPPER_PIN = 6;
 
+#define  F_MID 569
+volatile uint8_t  F_OFF;// 2
+volatile uint8_t  F_SPAN;// 25
+
 volatile long prevPulseMicros = 0;
 
 volatile uint8_t BIT;
-volatile uint8_t lastBIT;
 
-uint16_t f_mid;
+volatile uint16_t f_mid;
 
 uint8_t t1_cnt;
 
 long rpms = 0;
 
-volatile uint8_t C;
-
 volatile long latestPulseMicros = 0;
 
 volatile long revMicros = 0;
 
-uint16_t mean_buffer[512];
+#define MB_SIZE 512
+
+volatile uint16_t mean_buffer[MB_SIZE];
 uint16_t mean_buffer2[60];
-uint16_t mb_counter;
+volatile uint16_t mb_counter;
 uint16_t mb2_counter;
 uint32_t mean;
 uint16_t milsec;
@@ -64,19 +67,21 @@ char ch;
 
 
 void setup() {
-  f_mid = 570;
+  f_mid = F_MID;
+  F_OFF = 5;
+  F_SPAN = 0x50;
   t1_cnt = 0;
   BIT = 0;
-  lastBIT = 0;
-  C = 0;
   msg_cnt = 0;
   b1_cnt = 0;
   b2_cnt = 0;
   mb_counter = 0;
   mb2_counter = 0;
   milsec = 0;
-  //pinMode(STARTER_PIN, OUTPUT);  // Starter Relay
-  //pinMode(STOPPER_PIN, OUTPUT);  // Stopper Relay
+  pinMode(STARTER_PIN, OUTPUT);  // Starter Relay
+  pinMode(STOPPER_PIN, OUTPUT);  // Stopper Relay
+
+  pinMode(0, INPUT_PULLUP);
 
   digitalWrite(STARTER_PIN, LOW);
   digitalWrite(RXLED, HIGH);
@@ -121,7 +126,7 @@ void setup() {
   TIMSK1 |= (1 << OCIE1A);
   sei();  // allow interrupts
 #ifdef SERIAL_OUT   
-  Serial.println("go");
+//  Serial.println("go");
 #endif
 }
 
@@ -153,35 +158,46 @@ ISR(TIMER1_COMPA_vect) {
     dsp = 1;
   }
   if (rSq == 2 && ti == 120) { rSq = 0; }  //STOPBIT
-                                           //C |= (BIT<<7);
-                                           //C = C>>1;
-  //}
 }
 
 
 
 void loop() {
 
-  if (milsec >= 1000) {
+
+  if (has_eng) {
+
+    if (len == 4) {
+      F_OFF = buf[0];
+      F_SPAN = buf[1];
+    }
+
+    has_eng = false;
+  }
+
+
+  if (milsec >= 1000) { // one second
 
     mean = 0;
-    for(uint16_t i=0; i < 512; i++) {
+    for(uint16_t i = 0; i < MB_SIZE; i++) {
       mean += mean_buffer[i];
     }
-    mean /= 512;
+    mean /= MB_SIZE;
 
     mean_buffer2[mb2_counter++] = mean;
 
-  if (mb2_counter == 60) {
+  if (mb2_counter == 60) {  // one minute
     mean = 0;
     mb2_counter = 0;
-    for(uint8_t i=0; i < 60; i++) {
+    for(uint8_t i = 0; i < 60; i++) {
       mean += mean_buffer2[i];
     }
     mean /= 60;
     f_mid = mean;
-  #ifdef SERIAL_OUT
-    //Serial.println(mean, DEC);
+  #ifdef SERIAL_OUT_
+    Serial.println();
+    Serial.print("f_mid: ");
+    Serial.println(f_mid, DEC);
   #endif    
   }
 
@@ -342,23 +358,26 @@ void rpm() {
 
   prevPulseMicros = nowMicros;
 
-  mean_buffer[mb_counter++] = rpms;
-  if (mb_counter == 512) {
-    mb_counter = 0;
-  }
 
-  if (rpms > (f_mid+5) && rpms < (f_mid+20)) b1_cnt++;
-  if (b1_cnt == 2) {
+
+  if (rpms > (f_mid+F_OFF) && rpms < (f_mid+F_SPAN)) b1_cnt++;
+  if (b1_cnt == 5) {
     BIT = 1;
     b1_cnt = 0;
     b2_cnt = 0;
   }
 
-  if (rpms > (f_mid-20) && rpms < (f_mid-5)) b2_cnt++;
-  if (b2_cnt == 2) {
+  if (rpms > (f_mid-F_SPAN) && rpms < (f_mid-F_OFF)) b2_cnt++;
+  if (b2_cnt == 5) {
     BIT = 0;
     b1_cnt = 0;
     b2_cnt = 0;
+  }
+  if (b1_cnt || b2_cnt) {
+    mean_buffer[mb_counter++] = rpms;
+    if (mb_counter == MB_SIZE) {
+      mb_counter = 0;
+    }    
   }
 
 }
@@ -369,7 +388,7 @@ void MCP2515_ISR(int packetSize) {
   canId = CAN.packetId();
   uint8_t i = 0;
   switch (canId) {
-    case CAN_ID_ENG:
+    case CAN_ID:
       while (CAN.available()) {
         buf[i++] = CAN.read();
       }
@@ -387,7 +406,7 @@ void MCP2515_ISR(int packetSize) {
 void send_packet_message(uint8_t* message, int16_t len) {
 
   uint8_t j = 0;
-  CAN.beginPacket(0x065, 8, false);
+  CAN.beginPacket(CAN_ID, 8, false);
   CAN.write(j++);  // sequence counter 1st nibble and frame counter in 2nd nibble. Here we do not expect more than 16 frames
 
   CAN.write(len);
@@ -416,7 +435,7 @@ void send_packet_message(uint8_t* message, int16_t len) {
   uint8_t rest = len - (chunks * 7);
 
   for (uint8_t a = 0; a < chunks; a++) {
-    CAN.beginPacket(0x065, 8, false);
+    CAN.beginPacket(CAN_ID, 8, false);
     CAN.write(j++);
 
 
@@ -427,7 +446,7 @@ void send_packet_message(uint8_t* message, int16_t len) {
     CAN.endPacket();
   }
   if (rest) {
-    CAN.beginPacket(0x065, 8, false);
+    CAN.beginPacket(CAN_ID, 8, false);
     CAN.write(j++);
     uint8_t i;
     for (i = 0; i < 7; i++) {
