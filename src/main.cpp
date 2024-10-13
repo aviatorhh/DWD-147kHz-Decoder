@@ -2,6 +2,7 @@
 #include <CAN.h>
 #endif
 #include <Arduino.h>
+#include <avr/wdt.h>
 #include "main.h"
 
 uint8_t b1_cnt;
@@ -24,7 +25,7 @@ bool rtr;
 uint8_t len;
 uint8_t msg_cnt;
 
-uint8_t message[64];
+uint8_t message[80]; // two lines on the LCD
 #endif
 
 uint8_t ch_cnt;
@@ -56,7 +57,7 @@ volatile long revMicros = 0;
 volatile uint16_t mean_buffer[MB_SIZE];
 uint16_t mean_buffer2[60];
 volatile uint16_t mb_counter;
-uint16_t mb2_counter;
+uint8_t mb2_counter;
 uint32_t mean;
 uint16_t milsec;
 
@@ -128,6 +129,7 @@ void setup() {
 #ifdef SERIAL_OUT   
 //  Serial.println("go");
 #endif
+  wdt_enable(WDTO_1S);
 }
 
 
@@ -194,7 +196,7 @@ void loop() {
     }
     mean /= 60;
     f_mid = mean;
-  #ifdef SERIAL_OUT_
+  #ifdef SERIAL_OUT_DEBUG
     Serial.println();
     Serial.print("f_mid: ");
     Serial.println(f_mid, DEC);
@@ -331,8 +333,11 @@ void loop() {
       }
     }
     if (ch != '\0') {
+#ifdef HAS_CAN        
       message[msg_cnt++] = ch;
       message[msg_cnt] = '\0';
+#endif
+      wdt_reset();
 #ifdef SERIAL_OUT  
       Serial.write(ch);
 #endif
@@ -352,7 +357,8 @@ void loop() {
 
 
 void rpm() {
-  long nowMicros = micros();
+  
+  long nowMicros = micros(); 
 
   rpms = nowMicros - prevPulseMicros;
 
@@ -374,10 +380,10 @@ void rpm() {
     b2_cnt = 0;
   }
   if (b1_cnt || b2_cnt) {
-    mean_buffer[mb_counter++] = rpms;
-    if (mb_counter == MB_SIZE) {
+    if (mb_counter >= MB_SIZE) {
       mb_counter = 0;
     }    
+    mean_buffer[mb_counter++] = rpms;
   }
 
 }
