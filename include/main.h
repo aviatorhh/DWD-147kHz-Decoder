@@ -5,6 +5,6 @@
 void send_packet_message(uint8_t* message, int16_t len);
 void MCP2515_ISR(int packetSize);
 #endif
-void rpm();
+void signal();
 
 #endif
