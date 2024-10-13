@@ -24,7 +24,7 @@ bool rtr;
 uint8_t len;
 uint8_t msg_cnt;
 
-uint8_t message[64];
+uint8_t message[80]; // two lines on the LCD
 #endif
 
 uint8_t ch_cnt;
