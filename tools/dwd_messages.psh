@@ -113,6 +113,8 @@ class CanListener(can.Listener):
                     self._data_length = self._data_length - 1
                     i = i + 1
 
+                
+
 
             if msg.data[0] != 0x00:
                 self._sequence = (msg.data[0] & 0b11110000) >> 4
@@ -124,78 +126,78 @@ class CanListener(can.Listener):
                     self._data_length = self._data_length - 1
                     i = i + 1
 
-                if self._data_length == 0:
-                    
+            if self._data_length == 0:
+                
 
-                    if any(ext in self._data for ext in self._config['wanted']) and self._print_navtex == False:
-                        print("Startet recording for warnings")
-                        self._print_navtex = True
+                if any(ext in self._data for ext in self._config['wanted']) and self._print_navtex == False:
+                    print("Startet recording for warnings")
+                    self._print_navtex = True
 
-                        if self._config['print']:
+                    if self._config['print']:
 
-                            printer = Path(self._config['printer']['path'])
-                            if not printer.exists():
-                                
-                                try:
-                                    port = 1
-                                    self.s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
-                                    self.s.bind((self._config['bluetooth']['dongle'], port))
-                                    self.s.connect((self._config['bluetooth']['device'], port))
-                                except Exception as error:
-                                    print(type(error).__name__, error)
-                                    self.s.close()
-
-
-                    if "NNNN" in self._data and self._print_navtex:
-                        self._print_navtex = False
-                        
-                        self.send_with_messenger()
-                        self._message_of_interest = ""
-                       
-                        if self._config['print']:
-                            printer = Path(self._config['printer']['path'])
-                            if printer.exists():
-                                with open(self._config['printer']['path'], "w") as f:
-                                    print('\n\n\n', file=f)
-                            else:
-                                try:
-                                    self.s.send("\n\n\n".encode("utf-8")) # line feed
-                                    self.s.shutdown(socket.SHUT_WR)
-                                    self.s.close()
-                                except Exception as error:
-                                    print(type(error).__name__, error)
-                        
+                        printer = Path(self._config['printer']['path'])
+                        if not printer.exists():
                             
-
-                    print(self._data, end='')
-                    if len(self._last_messages) <= self._config['linebuffer']:
-                        self._last_messages.append(self._data)
-                    if len(self._last_messages) > self._config['linebuffer']:
-                        self._last_messages.pop(0)
-                    # send to all ws clients
-                    t_list = self._ws_clients
-                    if len(self._ws_clients) > 0:
-                        for c in self._ws_clients:
                             try:
-                                c.send(self._data)
-                            except:
-                                t_list.remove(c)
-                    self._ws_clients = t_list
+                                port = 1
+                                self.s = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM)
+                                self.s.bind((self._config['bluetooth']['dongle'], port))
+                                self.s.connect((self._config['bluetooth']['device'], port))
+                            except Exception as error:
+                                print(type(error).__name__, error)
+                                self.s.close()
+
+
+                if "NNNN" in self._data and self._print_navtex:
+                    self._print_navtex = False
                     
-                    if self._print_navtex:
-                        self._message_of_interest = self._message_of_interest + self._data
+                    self.send_with_messenger()
+                    self._message_of_interest = ""
+                    
+                    if self._config['print']:
+                        printer = Path(self._config['printer']['path'])
+                        if printer.exists():
+                            with open(self._config['printer']['path'], "w") as f:
+                                print('\n\n\n', file=f)
+                        else:
+                            try:
+                                self.s.send("\n\n\n".encode("utf-8")) # line feed
+                                self.s.shutdown(socket.SHUT_WR)
+                                self.s.close()
+                            except Exception as error:
+                                print(type(error).__name__, error)
+                    
+                        
 
-                        if self._config['print']:
-                            printer = Path(self._config['printer']['path'])
-                            if printer.exists():
+                print(self._data, end='')
+                if len(self._last_messages) <= self._config['linebuffer']:
+                    self._last_messages.append(self._data)
+                if len(self._last_messages) > self._config['linebuffer']:
+                    self._last_messages.pop(0)
+                # send to all ws clients
+                t_list = self._ws_clients
+                if len(self._ws_clients) > 0:
+                    for c in self._ws_clients:
+                        try:
+                            c.send(self._data)
+                        except:
+                            t_list.remove(c)
+                self._ws_clients = t_list
+                
+                if self._print_navtex:
+                    self._message_of_interest = self._message_of_interest + self._data
 
-                                with open(self._config['printer']['path'], "w") as f:
-                                    print(self._data.rstrip(), end='\n', file=f)
-                            else:
-                                try:
-                                    self.s.send(("{}\n".format(self._data.rstrip())).encode("utf-8"))
-                                except Exception as error:
-                                    print(type(error).__name__, error)
+                    if self._config['print']:
+                        printer = Path(self._config['printer']['path'])
+                        if printer.exists():
+
+                            with open(self._config['printer']['path'], "w") as f:
+                                print(self._data.rstrip(), end='\n', file=f)
+                        else:
+                            try:
+                                self.s.send(("{}\n".format(self._data.rstrip())).encode("utf-8"))
+                            except Exception as error:
+                                print(type(error).__name__, error)
                     
     def echo(self, websocket):
         if not websocket in self._ws_clients:
