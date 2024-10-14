@@ -25,7 +25,8 @@ bool rtr;
 uint8_t len;
 uint8_t msg_cnt;
 
-uint8_t message[80];  // two lines on the LCD
+#define MESSAGE_LENGTH 80
+char message[MESSAGE_LENGTH];  // two lines on the LCD
 #endif
 
 uint8_t ch_cnt;
@@ -92,7 +93,7 @@ void setup() {
 #ifdef HAS_CAN
     has_can = false;
     msg_cnt = 0;
-    
+
     CAN.setPins(MCP_CAN_CS_PIN, 7);
     CAN.setClockFrequency(8E6);
 
@@ -128,7 +129,7 @@ void setup() {
 #ifdef SERIAL_OUT
 //  Serial.println("go");
 #endif
-    wdt_enable(WDTO_1S);
+    wdt_enable(WDTO_2S);
 }
 
 ISR(TIMER1_COMPA_vect) {
@@ -169,7 +170,7 @@ ISR(TIMER1_COMPA_vect) {
 }
 
 void loop() {
-#ifdef HAS_CAN    
+#ifdef HAS_CAN
     if (has_can) {
         if (len == 4) {
             F_OFF = buf[0];
@@ -382,7 +383,11 @@ void loop() {
         if (ch != '\0') {
 #ifdef HAS_CAN
             message[msg_cnt++] = ch;
-            message[msg_cnt] = '\0';
+            if (ch == '\n' || msg_cnt == MESSAGE_LENGTH) {
+                send_packet_message(message);
+                msg_cnt = 0;
+                memset(message, '\0', sizeof(char) * MESSAGE_LENGTH);
+            }            
 #endif
             wdt_reset();
 #ifdef SERIAL_OUT
@@ -390,14 +395,6 @@ void loop() {
 #endif
         }
         dsp = 0;
-
-#ifdef HAS_CAN
-        if (ch == '\n') {
-            send_packet_message(message, msg_cnt);
-            msg_cnt = 0;
-        }
-
-#endif
     }
 }
 
@@ -451,7 +448,8 @@ void MCP2515_ISR(int packetSize) {
     }
 }
 
-void send_packet_message(uint8_t* message, int16_t len) {
+void send_packet_message(char* message) {
+    int16_t len = strlen(message);
     uint8_t j = 0;
     CAN.beginPacket(CAN_ID, 8, false);
     CAN.write(j++);  // sequence counter 1st nibble and frame counter in 2nd
@@ -459,8 +457,7 @@ void send_packet_message(uint8_t* message, int16_t len) {
 
     CAN.write(len);
 
-    uint8_t i;
-    for (i = 0; i < 6; i++) {
+    for (uint8_t i = 0; i < 6; i++) {
         if (i < len)
             CAN.write(*message++);
         else
