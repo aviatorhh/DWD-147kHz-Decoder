@@ -63,10 +63,15 @@
     var li_i = 0;   // list counter
     // regex to identify geo coordinates and make them a link to maps
     const re = new RegExp("\\d{1,2}\\.\\d[NS]\\s+\\d{1,3}\\.\\d[EW]", "g");
-    const re2 = new RegExp("\\d{1,2}-\d{1,2}[NS][\\s-]+\\d{1,3}-\\d{1,2}[EW]", "g");
+    const re2 = new RegExp("(\\d{1,2}-\\d{2},\\d{1,2}[NS])\\s+(\\d{1,3}-\\d{2},\\d{1,2}[EW])", "gm");
+
+    const regeo = new RegExp("(\\d{1,2}\\.\\d[NS])\\s+(\\d{1,3}\\.\\d[EW])", "");
+    const regeo2 = new RegExp("(\\d{1,2}-\\d{2},\\d{1,2}[NS])\\s+(\\d{1,3}-\\d{2},\\d{1,2}[EW])", "");
+
+    const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 5, useGrouping: false });
 
     const time_formatter = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); // timestamp formatter
-    
+
     var n_div;
     var scroll_it = true;   // controllable flag for scrolling
     var show_timestamp = false;   // controllable flag for showing timestamps
@@ -113,15 +118,21 @@
 
             // geo coordinates?
             let found = data.match(re);
+            let found2 = null;
             if (found == null) {
-                found = data.match(re2);
+                found2 = data.match(re2);
             }
 
             if (found) {
-                console.log(found);
                 let ds = '<li id="li_' + li_i + '">' + data + '</li>';
-                ds = ds.replace(re, '<a href="https://maps.google.com/maps/@' + geo2dec(found) + ',6z" target="_blank">' + found + '</a>');
-                n_div.append(ds);;
+                ds = ds.replace(re, '<a href="https://maps.google.com/maps/@' + geo2dec(found, regeo) + ',6z" target="_blank">' + found + '</a>');
+                n_div.append(ds);
+                console.log("Found geo 1 " + found);
+            } else if (found2) {
+                let ds = '<li id="li_' + li_i + '">' + data + '</li>';
+                ds = ds.replace(re2, '<a href="https://maps.google.com/maps/@' + geo2dec(found2, regeo2) + ',6z" target="_blank">' + found2 + '</a>');
+                n_div.append(ds);
+                console.log("Found geo 2 " + found2);
             } else {
                 let ds = '<li id="li_' + li_i + '">' + data + '</li>';
 
@@ -155,27 +166,46 @@
     /**
      * make dec geo coordinates
      */
-     const regeo = new RegExp("(\\d{1,2}\\.\\d[NS])\\s+(\\d{1,3}\\.\\d[EW])", "");
 
-     function geo2dec(geo) {
+
+    function geo2dec(geo, regeo) {
         let dec;
         let found = geo.toString().match(regeo);
 
         // latitude
         let lat = found[1].slice(-1);
 
-        dec = found[1].substr(0, found[1].length - 1);
+        if (found[1].includes('-')) {
+            let str = found[1].split('-');
+            dec = parseInt(str[0]);
+            dec += (parseFloat(str[1].replace(',', '.')) / 60.0);
+        } else {
+            dec = found[1].substr(0, found[1].length - 1);
+        }
+
+
+
         if (lat == 'S') {
             dec *= -1;
         }
         // longitude
         let lon = found[2].slice(-1);
 
-        let s_lon = found[2].substr(0, found[2].length - 1);
+        let s_lon;
+
+        if (found[2].includes('-')) {
+            let str = found[2].split('-');
+            s_lon = parseInt(str[0]);
+            s_lon += (parseFloat(str[1].replace(',', '.')) / 60.0);
+        } else {
+            s_lon = found[2].substr(0, found[2].length - 1);
+        }
+
+
         if (lon == 'W') {
             s_lon *= -1;
         }
-        dec = dec + ',' + s_lon;
+        dec = nf.format(dec) + ',' + nf.format(s_lon);
 
         return dec;
     }
