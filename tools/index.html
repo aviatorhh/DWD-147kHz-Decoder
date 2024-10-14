@@ -49,7 +49,8 @@
 <body>
     <div id="top">
         <form>
-            <input id="scroll" type="checkbox" name="scroll" checked> Scroll Page
+            <input id="scroll" type="checkbox" name="scroll" checked> Scroll Page&nbsp;&nbsp;
+            <input id="timestamp" type="checkbox" name="timestamp"> Timestamp
         </form>
     </div>
     <div id="navtex">
@@ -64,9 +65,11 @@
     const re = new RegExp("\\d{1,2}\\.\\d[NS]\\s+\\d{1,3}\\.\\d[EW]", "g");
     const re2 = new RegExp("\\d{1,2}-\d{1,2}[NS][\\s-]+\\d{1,3}-\\d{1,2}[EW]", "g");
 
+    const time_formatter = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); // timestamp formatter
     
     var n_div;
     var scroll_it = true;   // controllable flag for scrolling
+    var show_timestamp = false;   // controllable flag for showing timestamps
 
     /**
      * do the ws connection
@@ -78,14 +81,24 @@
          * init our stuff here
          */
         ws.onopen = function () {
+            date = Date.now();
+            let ts = '';
+            if (show_timestamp) {
+                ts = time_formatter.format(date) + ' - ';
+            }
             li_i = 0;
             ws.send(JSON.stringify({}));    // send out some empty stuff to establish a connection
-            n_div.append('<li id="' + (li_i++) + '">Connection opened ...</li>');
+            n_div.append('<li id="' + (li_i++) + '">' + ts + 'Connection opened ...</li>');
         };
         var linebuffer_length = 100;   // linebuffer length (init value)
         ws.onmessage = function (e) {
             //console.log('Message:', e.data);
             let data = e.data.replace(/(?:\r\n|\n)/g, '<br>');
+
+            date = Date.now();
+            if (show_timestamp) {
+                data = time_formatter.format(date) + ' - ' + data;
+            }
 
             // check if some config data has been sent via the ws
             if (li_i++ == 1) {
@@ -94,7 +107,7 @@
                     linebuffer_length = jv.linebuffer;  // amount of lines to display
                     return;
                 } catch (err) {
-                    data = err.name;
+                    data = time_formatter.format(date) + ' - ' + err.name; // we want the time always shown on err
                 }
             }
 
@@ -170,6 +183,10 @@
 
     $('#scroll').on('click', function (e) {
         scroll_it = $(this).is(':checked');
+        return true;
+    });
+    $('#timestamp').on('click', function (e) {
+        show_timestamp = $(this).is(':checked');
         return true;
     });
 
