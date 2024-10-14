@@ -1,163 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.6.0">
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <title>DWD 147.7kHz Messages</title>
-  <style>
-  body {
-         background-color: black;
-    color: seagreen;
-  }
-  #navtex, div#top, li a {
-    color: seagreen;
-        font-family: "Lucida Console", "Menlo", "Monaco", "Courier", monospace;
-        padding-top: 11px;
-  }
-  div#top {
-        position: fixed;
-    	background-color: rgb(0 0 0 / 100%);
-    	-moz-box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
-    	-webkit-box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
-    	box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
-    	width: 100%;
-    	padding: 8px 0px 2px 4px;
-    	margin: 0;
-    	top: 0;
-    	left: 0;
-    	height: 22px;
- }
-  #navtex ul {
-	  list-style: none;
-    margin: 0 0px 0px 0px;
-    padding: 17px 0px 0px 0;
-  }
-  </style>
+    <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.6.0">
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>DWD 147.7kHz Messages</title>
+    <style>
+        body {
+            background-color: black;
+            color: seagreen;
+        }
+
+        #navtex,
+        div#top,
+        li a {
+            color: seagreen;
+            font-family: "Lucida Console", "Menlo", "Monaco", "Courier", monospace;
+            padding-top: 11px;
+        }
+
+        div#top {
+            position: fixed;
+            background-color: rgb(0 0 0 / 100%);
+            -moz-box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
+            -webkit-box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
+            box-shadow: 0px 6px 6px 0px rgba(255, 255, 255, 0.25);
+            width: 100%;
+            padding: 8px 0px 2px 4px;
+            margin: 0;
+            top: 0;
+            left: 0;
+            height: 22px;
+        }
+
+        #navtex ul {
+            list-style: none;
+            margin: 0 0px 0px 0px;
+            padding: 17px 0px 0px 0;
+        }
+    </style>
 </head>
+
 <body>
-  <div id="top">
-    <form>
-      <input id="scroll" type="checkbox" name="scroll" checked> Scroll Page
-    </form>
-  </div>
-  <div id="navtex">
-	  <ul/>
-  </div>
+    <div id="top">
+        <form>
+            <input id="scroll" type="checkbox" name="scroll" checked> Scroll Page
+        </form>
+    </div>
+    <div id="navtex">
+        <ul />
+    </div>
 </body>
 <script src="jquery-3.7.1.min.js"></script>
-  <script>
+<script>
 
-   var li_i = 0;
-        const re = new RegExp("\\d{1,2}\\.\\d[NS]\\s+\\d{1,3}\\.\\d[EW]", "g");
-   const re2 = new RegExp("\\d{1,2}-\d{1,2}[NS][\\s-]+\\d{1,3}-\\d{1,2}[EW]", "g");
-        //const re = new RegExp("DDH47", "g");
-        var n_div;// = document.getElementById('navtex');
-        var scroll_it = true;
-  function connect() {
-  var ws = new WebSocket('wss://' + location.hostname + '/ws/');
-  ws.onopen = function() {
-   li_i = 0;
-    // subscribe to some channels
-    ws.send(JSON.stringify({
-    }));
-    n_div.append('<li id="' + (li_i++) + '">Recording started ...</li>');
-  };
-var lb=100;
-  ws.onmessage = function(e) {
-    //console.log('Message:', e.data);
-	  let data = e.data;
-	  if (li_i++ == 1) {
-	  try {
-		  let  jv = JSON.parse(data);
-		  lb = jv.linebuffer;
-		  return;
-	  } catch (err) {
-		  data=err.name;
-	  }
-          }
+    var li_i = 0;   // list counter
+    // regex to identify geo coordinates and make them a link to maps
+    const re = new RegExp("\\d{1,2}\\.\\d[NS]\\s+\\d{1,3}\\.\\d[EW]", "g");
+    const re2 = new RegExp("\\d{1,2}-\d{1,2}[NS][\\s-]+\\d{1,3}-\\d{1,2}[EW]", "g");
 
-        
-	let  found = data.match(re);
-        if (found == null) {
-           found = data.match(re2);
-	}
+    
+    var n_div;
+    var scroll_it = true;   // controllable flag for scrolling
 
-        if (found) {
+    /**
+     * do the ws connection
+     */
+    function connect() {
+        var ws = new WebSocket('wss://' + location.hostname + '/ws/');
+
+        /**
+         * init our stuff here
+         */
+        ws.onopen = function () {
+            li_i = 0;
+            ws.send(JSON.stringify({}));    // send out some empty stuff to establish a connection
+            n_div.append('<li id="' + (li_i++) + '">Connection opened ...</li>');
+        };
+        var linebuffer_length = 100;   // linebuffer length (init value)
+        ws.onmessage = function (e) {
+            //console.log('Message:', e.data);
+            let data = e.data.replace(/(?:\r\n|\n)/g, '<br>');
+
+            // check if some config data has been sent via the ws
+            if (li_i++ == 1) {
+                try {
+                    let jv = JSON.parse(data);
+                    linebuffer_length = jv.linebuffer;  // amount of lines to display
+                    return;
+                } catch (err) {
+                    data = err.name;
+                }
+            }
+
+            // geo coordinates?
+            let found = data.match(re);
+            if (found == null) {
+                found = data.match(re2);
+            }
+
+            if (found) {
                 console.log(found);
-		let ds = '<li id="li_' + li_i + '">' + data + '</li>';
+                let ds = '<li id="li_' + li_i + '">' + data + '</li>';
                 ds = ds.replace(re, '<a href="https://maps.google.com/maps/@' + geo2dec(found) + ',6z" target="_blank">' + found + '</a>');
                 n_div.append(ds);;
-	} else {
-let ds = '<li id="li_' + li_i + '">' + data + '</li>';
+            } else {
+                let ds = '<li id="li_' + li_i + '">' + data + '</li>';
 
- n_div.append(ds);
+                n_div.append(ds);
 
-        }
-	  if (++li_i > lb) {
-		  $("#navtex ul li").eq(0).remove();
-  	}
-          if (scroll_it) {
+            }
+
+            // cut the list if it exeeds the linebuffer length value
+            if (++li_i > linebuffer_length) {
+                $("#navtex ul li").eq(0).remove();
+            }
+            if (scroll_it) {
                 window.scrollTo(0, document.body.scrollHeight);
-          }
-  };
+            }
+        };
 
-  ws.onclose = function(e) {
-    console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
-    n_div.append('<li id="' + (li_i++) + '">Recording stopped ...</li>');
-    setTimeout(function() {
-      connect();
-    }, 1000);
-  };
+        ws.onclose = function (e) {
+            console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
+            n_div.append('<li id="' + (li_i++) + '">Recording stopped ...</li>');
+            setTimeout(function () {
+                connect();
+            }, 1000);
+        };
 
-  ws.onerror = function(err) {
-    console.error('Socket encountered error: ', err.message, 'Closing socket');
-    ws.close();
-  };
-  }
+        ws.onerror = function (err) {
+            console.error('Socket encountered error: ', err.message, 'Closing socket');
+            ws.close();
+        };
+    }
 
-  const regeo = new RegExp("(\\d{1,2}\\.\\d[NS])\\s+(\\d{1,3}\\.\\d[EW])", "");
-  function geo2dec(geo) {
-	let dec;
-	let found = geo.toString().match(regeo);
-	
-	// latitude
-	let lat = found[1].slice(-1);
-	
-	dec = found[1].substr(0, found[1].length-1);
-	if (lat == 'S') {
-		dec *= -1;
-	}
-	// longitude
-	let lon = found[2].slice(-1);
-	
-	let s_lon = found[2].substr(0, found[2].length-1);
-	if (lon == 'W') {
-		s_lon *= -1;
-	}
-	dec = dec + ',' + s_lon;
+    /**
+     * make dec geo coordinates
+     */
+     const regeo = new RegExp("(\\d{1,2}\\.\\d[NS])\\s+(\\d{1,3}\\.\\d[EW])", "");
 
-	return dec;
-  }
+     function geo2dec(geo) {
+        let dec;
+        let found = geo.toString().match(regeo);
+
+        // latitude
+        let lat = found[1].slice(-1);
+
+        dec = found[1].substr(0, found[1].length - 1);
+        if (lat == 'S') {
+            dec *= -1;
+        }
+        // longitude
+        let lon = found[2].slice(-1);
+
+        let s_lon = found[2].substr(0, found[2].length - 1);
+        if (lon == 'W') {
+            s_lon *= -1;
+        }
+        dec = dec + ',' + s_lon;
+
+        return dec;
+    }
 
 
+    $('#scroll').on('click', function (e) {
+        scroll_it = $(this).is(':checked');
+        return true;
+    });
 
- 
+    $(document).ready(function () {
+        connect();
+        n_div = $('#navtex ul');
+    });
 
-        $('#scroll').on('click', function(e) {
-                scroll_it = $(this).is(':checked');
-                return true;
-        });
-
-	$( document ).ready(function() {
-  		connect();
-   		n_div = $('#navtex ul');
-	});
-
-  </script>
+</script>
 
 </html>
