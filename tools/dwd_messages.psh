@@ -10,6 +10,7 @@ import struct
 import socket
 import time
 from pprint import pprint
+import datetime
 import random
 import os
 from os import system
@@ -171,7 +172,7 @@ class CanListener(can.Listener):
 
                 print(self._data, end='')
                 if len(self._last_messages) <= self._config['linebuffer']:
-                    self._last_messages.append(self._data)
+                    self._last_messages.append({ "message": self._data, "timestamp": datetime.datetime.now().isoformat() })
                 if len(self._last_messages) > self._config['linebuffer']:
                     self._last_messages.pop(0)
                 # send to all ws clients
@@ -179,7 +180,7 @@ class CanListener(can.Listener):
                 if len(self._ws_clients) > 0:
                     for c in self._ws_clients:
                         try:
-                            c.send(self._data)
+                            c.send(json.dumps({ "message": self._data, "timestamp": datetime.datetime.now().isoformat() }))
                         except:
                             t_list.remove(c)
                 self._ws_clients = t_list
@@ -206,7 +207,7 @@ class CanListener(can.Listener):
             for message in websocket:
                 websocket.send(json.dumps(self._client_config))
                 for m in self._last_messages:
-                    websocket.send(m)
+                    websocket.send(json.dumps(m))
         except:
             pass
 class CustomHelpFormatter(argparse.HelpFormatter):

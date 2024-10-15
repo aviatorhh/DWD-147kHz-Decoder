@@ -54,10 +54,11 @@
         </form>
     </div>
     <div id="navtex">
-        <ul />
+        <ul></ul>
     </div>
 </body>
 <script src="jquery-3.7.1.min.js"></script>
+<script src="jquery.cookie.js"></script>
 <script>
 
     var li_i = 0;   // list counter
@@ -98,43 +99,47 @@
         var linebuffer_length = 100;   // linebuffer length (init value)
         ws.onmessage = function (e) {
             //console.log('Message:', e.data);
-            let data = e.data.replace(/(?:\r\n|\n)/g, '<br>');
-
-            date = Date.now();
-            if (show_timestamp) {
-                data = time_formatter.format(date) + ' - ' + data;
-            }
+            let data = JSON.parse(e.data);
+            
+            
 
             // check if some config data has been sent via the ws
             if (li_i++ == 1) {
                 try {
-                    let jv = JSON.parse(data);
-                    linebuffer_length = jv.linebuffer;  // amount of lines to display
+                    //let jv = JSON.parse(e.data);
+                    linebuffer_length = data.linebuffer;  // amount of lines to display
                     return;
                 } catch (err) {
-                    data = time_formatter.format(date) + ' - ' + err.name; // we want the time always shown on err
+                    data.message = time_formatter.format(date) + ' - ' + err.name; // we want the time always shown on err
                 }
             }
 
+            data.message = data.message.replace(/(?:\r\n|\n)/g, '<br>');
+
+            date = Date.parse(data.timestamp);
+            if (show_timestamp) {
+                data.message = time_formatter.format(date) + ' - ' + data.message;
+            }
+
             // geo coordinates?
-            let found = data.match(re);
+            let found = data.message.match(re);
             let found2 = null;
             if (found == null) {
-                found2 = data.match(re2);
+                found2 = data.message.match(re2);
             }
 
             if (found) {
-                let ds = '<li id="li_' + li_i + '">' + data + '</li>';
+                let ds = '<li id="li_' + li_i + '">' + data.message + '</li>';
                 ds = ds.replace(re, '<a href="https://maps.google.com/maps/@' + geo2dec(found, regeo) + ',6z" target="_blank">' + found + '</a>');
                 n_div.append(ds);
                 console.log("Found geo 1 " + found);
             } else if (found2) {
-                let ds = '<li id="li_' + li_i + '">' + data + '</li>';
+                let ds = '<li id="li_' + li_i + '">' + data.message + '</li>';
                 ds = ds.replace(re2, '<a href="https://maps.google.com/maps/@' + geo2dec(found2, regeo2) + ',6z" target="_blank">' + found2 + '</a>');
                 n_div.append(ds);
                 console.log("Found geo 2 " + found2);
             } else {
-                let ds = '<li id="li_' + li_i + '">' + data + '</li>';
+                let ds = '<li id="li_' + li_i + '">' + data.message + '</li>';
 
                 n_div.append(ds);
 
@@ -213,16 +218,27 @@
 
     $('#scroll').on('click', function (e) {
         scroll_it = $(this).is(':checked');
+        $.cookie('scroll_it', scroll_it);
         return true;
     });
     $('#timestamp').on('click', function (e) {
         show_timestamp = $(this).is(':checked');
+        $.cookie('show_timestamp', show_timestamp);
+        
         return true;
     });
 
     $(document).ready(function () {
-        connect();
+        if (typeof $.cookie('scroll_it') !== 'undefined') {
+            scroll_it = (/true/).test($.cookie('scroll_it'));
+            $( "#scroll" ).prop( "checked", scroll_it );
+        }
+        if (typeof $.cookie('show_timestamp') !== 'undefined') {
+            show_timestamp = (/true/).test($.cookie('show_timestamp'));
+            $( "#timestamp" ).prop( "checked", show_timestamp );
+        }
         n_div = $('#navtex ul');
+        connect();
     });
 
 </script>
