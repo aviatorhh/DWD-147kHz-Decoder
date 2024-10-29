@@ -172,7 +172,7 @@ class CanListener(can.Listener):
 
                 print(self._data, end='')
                 if len(self._last_messages) <= self._config['linebuffer']:
-                    self._last_messages.append({ "message": self._data, "timestamp": datetime.datetime.now().isoformat() })
+                    self._last_messages.append({ "message": self._data, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat() })
                 if len(self._last_messages) > self._config['linebuffer']:
                     self._last_messages.pop(0)
                 # send to all ws clients
@@ -180,7 +180,7 @@ class CanListener(can.Listener):
                 if len(self._ws_clients) > 0:
                     for c in self._ws_clients:
                         try:
-                            c.send(json.dumps({ "message": self._data, "timestamp": datetime.datetime.now().isoformat() }))
+                            c.send(json.dumps({ "message": self._data, "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat() }))
                         except:
                             t_list.remove(c)
                 self._ws_clients = t_list

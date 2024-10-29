@@ -71,7 +71,7 @@
 
     const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 5, useGrouping: false });
 
-    const time_formatter = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); // timestamp formatter
+    const time_formatter = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC' }); // timestamp formatter
 
     var n_div;
     var scroll_it = true;   // controllable flag for scrolling
@@ -90,7 +90,7 @@
             date = Date.now();
             let ts = '';
             if (show_timestamp) {
-                ts = time_formatter.format(date) + ' - ';
+                ts = time_formatter.format(date) + 'z - ';
             }
             li_i = 0;
             ws.send(JSON.stringify({}));    // send out some empty stuff to establish a connection
@@ -110,7 +110,7 @@
                     linebuffer_length = data.linebuffer;  // amount of lines to display
                     return;
                 } catch (err) {
-                    data.message = time_formatter.format(date) + ' - ' + err.name; // we want the time always shown on err
+                    data.message = time_formatter.format(date) + 'z - ' + err.name; // we want the time always shown on err
                 }
             }
 
@@ -118,7 +118,7 @@
 
             date = Date.parse(data.timestamp);
             if (show_timestamp) {
-                data.message = time_formatter.format(date) + ' - ' + data.message;
+                data.message = time_formatter.format(date) + 'z - ' + data.message;
             }
 
             // geo coordinates?
